@@ -1,22 +1,57 @@
 
-# Code_Quantum_move-recommendation-system_AITH-2025
+# Code_Quantum — Movie Recommendation System (Implicit ALS) + Bonus Regression
 
-```markdown
-# Movie Recommendation System (Implicit ALS) — MovieLens
+This repository contains two parts:
 
-A modular movie recommender built with **Implicit Alternating Least Squares (ALS)** using the **MovieLens Latest Small** dataset.  
-This project trains a collaborative filtering model, evaluates it with **Recall@K**, and generates Top-N movie recommendations.
+1) **Main Task:** Movie Recommendation System using **Implicit ALS** (Collaborative Filtering) on MovieLens.  
+2) **Bonus Round:** Automated regression system to **predict user ratings** for unseen movies using movie attributes + historical ratings.
+
+Both pipelines are modular and follow a cookiecutter-like structure.
 
 ---
 
-## Features
+##  Part 1: Main Task — Implicit ALS Recommender
 
--  Implicit ALS collaborative filtering (latent factors)
--  Per-user train/test split
--  Recall@K evaluation
--  Clean, cookiecutter-style modular structure
--  Inference script for recommendations
--  Saves trained model + mappings for later use
+### What it does
+- Trains an **Implicit ALS** model on historical user ratings.
+- Evaluates model using **Recall@K**.
+- Generates Top-N movie recommendations for users.
+- **Inference-ready:** Evaluator can run inference directly via `Inference/infer.py` without running training first **as long as artifacts exist**.
+
+### Key files
+- `train_and_save.py` → run once to generate model artifacts
+- `Inference/infer.py` → inference-ready script
+- `main.py` → full training + evaluation + sample inference pipeline
+- `Modeling/build_model.py` → ALS model training logic
+- `Modeling/performance.py` → Recall@K evaluation
+
+---
+
+##  Part 2: Bonus Round — Regression Rating Predictor
+
+### What it does
+- Trains regression model using historical user reviews.
+- Predicts how a user might rate an **unseen movie** based on:
+  - genres (one-hot)
+  - release year
+  - user average rating
+  - movie average rating
+  - movie popularity (rating count)
+- Evaluates model using:
+  - **RMSE**
+  - **MSE**
+  - **MAE** (extra metric)
+- **Inference-ready CLI** for:
+  - single user+movie rating prediction
+  - Top-N unseen movies for a user ranked by predicted rating
+
+### Key files
+- `bonus_main.py` → trains regression model + saves artifacts
+- `Inference/regression_infer_cli.py` → predict rating for (userId, movieId)
+- `Inference/regression_topn_cli.py` → Top-N unseen movies for a user
+- `Dataset/regression_loader.py` → feature builder
+- `Modeling/regression_model.py` → regression model builder
+- `Modeling/regression_performance.py` → RMSE/MSE/MAE evaluation
 
 ---
 
@@ -36,16 +71,22 @@ Code_Quantum/
 │
 ├── Dataset/
 │   ├── **init**.py
-│   └── dataset_loader.py
+│   ├── dataset_loader.py
+│   └── regression_loader.py
 │
 ├── Modeling/
 │   ├── **init**.py
 │   ├── build_model.py
-│   └── performance.py
+│   ├── performance.py
+│   ├── regression_model.py
+│   └── regression_performance.py
 │
 ├── Inference/
 │   ├── **init**.py
-│   └── infer.py
+│   ├── infer.py
+│   ├── regression_infer.py
+│   ├── regression_infer_cli.py
+│   └── regression_topn_cli.py
 │
 ├── Resources/
 │   ├── **init**.py
@@ -60,9 +101,13 @@ Code_Quantum/
 │   ├── user_to_id.pkl
 │   ├── id_to_item.pkl
 │   ├── recall_scores.csv
-│   └── recommendations.csv
+│   ├── recommendations.csv
+│   ├── regression_model.pkl
+│   └── regression_stats.pkl
 │
 ├── main.py
+├── train_and_save.py
+├── bonus_main.py
 ├── requirements.txt
 └── README.md
 
@@ -72,14 +117,14 @@ Code_Quantum/
 
 ## Dataset
 
-We use the MovieLens **latest-small** dataset:
+Using **MovieLens latest-small** dataset:
 
-- `ratings.csv` → userId, movieId, rating, timestamp  
-- `movies.csv`  → movieId, title, genres  
-- `tags.csv`    → (optional metadata)  
-- `links.csv`   → (for IMDb/TMDb ids; optional)  
+- `ratings.csv` → user ratings (historical reviews)
+- `movies.csv`  → title + genres
+- `tags.csv`    → optional metadata
+- `links.csv`   → optional IMDb/TMDb ids
 
-Place all CSVs inside:
+Place files here:
 
 ```
 
@@ -91,10 +136,9 @@ Resources/
 
 ## Setup
 
-### 1) Create & activate a virtual environment (Windows)
+> **Important:** `implicit` works smoothly on Windows with Python **3.11/3.12**.
 
-> **Important:** `implicit` works best with Python **3.11/3.12** on Windows.
-
+### 1) Create & activate venv
 ```powershell
 python -m venv venv
 .\venv\Scripts\activate
@@ -115,134 +159,148 @@ pip install -r requirements.txt
 
 ---
 
-## Run the Project
+#  MAIN TASK USAGE (ALS)
 
-### Step 1: (Optional) Preprocess dataset
-
-This removes duplicates, nulls, and adds confidence if needed:
+## A) Train once & save artifacts (YOU run this)
 
 ```powershell
-python DataPreprocessing/preprocess.py
+python train_and_save.py
 ```
 
-It will create:
-
-```
-Resources/ratings_clean.csv
-```
-
-If you use cleaned ratings, update `Configuration/config.py`:
-
-```python
-ratings_path = "Resources/ratings_clean.csv"
-```
-
----
-
-### Step 2: Train + Evaluate + Recommend
-
-```powershell
-python main.py
-```
-
-You will see:
-
-* Train/test sizes
-* ALS training log
-* **Recall@K scores**
-* Sample recommendations for 5 users
-
-Outputs saved to:
+This creates:
 
 ```
 output/
-  recall_scores.csv
-  recommendations.csv
   als_model.pkl
   user_to_id.pkl
   id_to_item.pkl
 ```
 
+> Make sure these are pushed to GitHub (don’t ignore them).
+
 ---
 
-### Step 3: Standalone inference
-
-After running `main.py`, you can recommend movies separately:
+## B) Inference directly (EVALUATOR runs this)
 
 ```powershell
-python Inference/infer.py
+python Inference/infer.py --userId 10 --topN 10
+```
+
+Output example:
+
+```
+Top-10 recommendations for user 10:
+  - Toy Story (1995)
+  - Heat (1995)
+  ...
 ```
 
 ---
 
-## Configuration
+## C) Full training + evaluation pipeline (optional check)
 
-Main config is in:
-
-```
-Configuration/config.py
+```powershell
+python main.py
 ```
 
-You can tune:
+Shows:
 
-* ALS parameters: `factors`, `regularization`, `iterations`
-* Recall@K values: `k_values`
-* Number of recommendations: `n_recommendations`
-* File paths
+* train/test sizes
+* Recall@K
+* sample recommendations
 
----
-
-## Evaluation Metric
-
-We evaluate with **Recall@K**:
-
-[
-Recall@K = \frac{|Recommended@K \cap TrueTestItems|}{|TrueTestItems|}
-]
-
-Printed on console and saved to:
+Also saves:
 
 ```
 output/recall_scores.csv
+output/recommendations.csv
 ```
+
+---
+
+#  BONUS ROUND USAGE (Regression)
+
+## A) Train regression model & save artifacts (YOU run this)
+
+```powershell
+python bonus_main.py
+```
+
+Creates:
+
+```
+output/regression_model.pkl
+output/regression_stats.pkl
+```
+
+Prints:
+
+* RMSE
+* MSE
+* MAE
+* sample prediction
+
+---
+
+## B) Predict rating for a specific user-movie (CLI inference)
+
+```powershell
+python Inference/regression_infer_cli.py --userId 10 --movieId 50
+```
+
+Output:
+
+```
+Predicted Rating: 3.8421
+```
+
+---
+
+## C) Top-N unseen movies for a user (ranked by predicted rating)
+
+```powershell
+python Inference/regression_topn_cli.py --userId 10 --topN 10
+```
+
+Output:
+
+```
+01. Shawshank Redemption (1994) | Predicted Rating: 4.61
+02. ...
+```
+
+---
+
+## Evaluation Metrics (Bonus)
+
+* **MSE**
+* **RMSE**
+* **MAE** (extra chosen metric)
 
 ---
 
 ## Troubleshooting
 
-###  `implicit` installation error on Windows
+###  implicit install error on Python 3.13
 
-If you’re using Python 3.13, implicit may fail to build.
+Fix: Use Python 3.11/3.12 and recreate venv.
 
- Fix: Install Python 3.11/3.12 and recreate venv.
+###  Index out of bounds during ALS inference
 
----
+Artifacts mismatch.
+Fix:
 
-###  `ModuleNotFoundError: Resources.resource_manager`
-
-Make sure you have:
-
-* `Resources/resource_manager.py`
-* `Resources/__init__.py`
-* Running from project root (same place as main.py)
-
----
+1. delete `output/*.pkl`
+2. run `python train_and_save.py` again
+3. rerun inference.
 
 ###  Circular import error
 
-Never import project modules inside `config.py`.
-`config.py` should only contain settings.
+Do not import project modules inside `config.py`.
 
 ---
 
-## Future Improvements
+## Author
 
-* Hybrid recommender using **tags + genres**
-* Add CNN/Transformer content embeddings
-* Personalized re-ranking
-* Web / Streamlit UI
-* Fetch IMDb posters & ratings from TMDb
-
----
-
+**Razwanul Islam Tanvir**
 
